@@ -57,30 +57,6 @@ def handle_alarm(sig, frame):
         health -= 1
     signal.alarm(2)
 
-def usr1_handler(sig, frame):
-    global gold, mana
-    if gold > 5:
-        gold -= 5
-        mana += 10
-    else:
-        sys.stderr.write("Not enough gold to buy the potion\n")
-
-def usr2_handler(sig, frame):
-    global health, mana, pos_r, pos_c, gold
-    if mana > 5:
-        mana -= 5
-        health += 10
-    else: 
-        sys.stderr.write("Not enough mana to cast the spell\n")
-
-def quit_handler(sig, frame):
-    sys.stderr.write("Position: ({}, {}), Health: {}, Mana: {}, Gold: {}\n".format(pos_r, pos_c, health, mana, gold))
-
-def stop_handler(sig, frame):
-    global petrified, adv_id, pos_r, pos_c, health
-    petrified = True
-    sys.stderr.write("Adventurer {} is petrified at position ({}, {}) with health {}\n".format(adv_id, pos_r, pos_c, health))
-
 def main():
     global adv_name, adv_id, pos_r, pos_c, health, mana, gold, sensor, petrified
     
@@ -104,3 +80,90 @@ def main():
     # Main command loop
     while True:
         try:
+            # 1. Capture the input and make it lowercase
+            choice = input("Enter your choice: ")
+            choice = choice.lower()
+            
+            # 2. Split the string into a list of parts
+            parts = choice.split()
+            
+            # 3. Check if the list is empty (in case the user just pressed Enter)
+            if (len(parts) == 0):
+                continue 
+                
+            # 4. Extract the main command (the first word)
+            command = parts[0]
+            
+            # 5. Route the command using if/elif blocks
+            if command == "exit":
+                print(f"{adv_name}: Position: {pos_r} {pos_c} Health: {health} Mana: {mana} Gold: {gold}")
+                sys.exit(0)
+                
+            elif command == "health":
+                print(f"Health: {health}")
+                
+            elif command == "pos":
+                print(f"Position: {pos_r} {pos_c}")
+                
+            elif command == "unbox":
+                if mana < 2:
+                    print(f"{adv_name}: I cannot cast spells")
+                mana -= 2
+                cell_content = sensor.what_is_here(pos_r,pos_c)
+                if cell_content == 'B':
+                    box_type = sensor.type_of_box(pos_r,pos_c)
+                    print(f"Type: {box_type}")
+                    if box_type == 'MP':
+                        mana += 20
+                    elif box_type =='MD':
+                        mana -= 10
+                    elif box_type == 'HP':
+                        mana +=20
+                    elif box_type =='HD':
+                        mana -=10
+                    elif box_type == 'G':
+                        mana +=10
+                    print(f"Health: {health} Mana: {mana} Gold: {gold}")
+                else:
+                    print(f"No box at position {pos_r}, {pos_c}")
+
+                print("Unboxing logic goes here...")
+                
+            elif command == "mv":
+                if len(parts) == 2:
+                    direction = parts[1]
+                    
+                # Check if they actually provided a second word (the direction)
+                    if health <= 0 or mana < 2:
+                        print(f"{adv_name}: I cannot move {direction}")
+                        print(f"KO")
+                        continue
+                    new_r = pos_r
+                    new_c = pos_c
+                    if direction == 'up':
+                        new_r -= 1
+                    elif direction == 'down':
+                        new_r += 1
+                    elif direction == 'left':
+                        new_c -= 1
+                    elif direction == 'right':
+                        new_c += 1
+                    mana -= 2
+                    target = sensor.what_is_here(new_r, new_c)
+                    if target is not None and target != '#':
+                        pos_r = new_r
+                        pos_c = new_c
+                        print(f"OK")
+                    else:
+                        print(f"{adv_name}: I cannot move {direction}")
+                        print(f"OK")
+                else:
+                    print("Invalid move command. Did you forget the direction?")
+                    
+            else:
+                print("Invalid command")
+                
+        except EOFError:
+            break
+        except Exception:
+            pass
