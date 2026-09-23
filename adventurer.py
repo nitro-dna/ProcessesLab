@@ -56,6 +56,30 @@ def handle_alarm(sig, frame):
     if not petrified:
         health -= 1
     signal.alarm(2)
+def usr1_handler(sig, frame):
+    global gold, mana
+    if gold > 5:
+        gold -= 5
+        mana += 10
+    else:
+        sys.stderr.write("Not enough gold to buy the potion\n")
+
+def usr2_handler(sig, frame):
+    global health, mana, pos_r, pos_c, gold
+    if mana > 5:
+        mana -= 5
+        health += 10
+    else: 
+        sys.stderr.write("Not enough mana to cast the spell\n")
+
+def quit_handler(sig, frame):
+    sys.stderr.write("Position: ({}, {}), Health: {}, Mana: {}, Gold: {}\n".format(pos_r, pos_c, health, mana, gold))
+
+def stop_handler(sig, frame):
+    global petrified, adv_id, pos_r, pos_c, health
+    petrified = True
+    sys.stderr.write("Adventurer {} is petrified at position ({}, {}) with health {}\n".format(adv_id, pos_r, pos_c, health))
+
 
 def main():
     global adv_name, adv_id, pos_r, pos_c, health, mana, gold, sensor, petrified
