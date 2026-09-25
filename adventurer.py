@@ -80,7 +80,17 @@ def stop_handler(sig, frame):
     petrified = True
     sys.stderr.write("Adventurer {} is petrified at position ({}, {}) with health {}\n".format(adv_id, pos_r, pos_c, health))
 
+def cont_handler(sig, frame):
+    global petrified
+    if petrified:
+      petrified = False
+      sys.stderr.write("Adventurer {} is no longer petrified\n".format(adv_id))
 
+def int_handler(sig, frame):
+    global health
+    if health >= 10:
+     health -= 10
+     
 def main():
     global adv_name, adv_id, pos_r, pos_c, health, mana, gold, sensor, petrified
     
