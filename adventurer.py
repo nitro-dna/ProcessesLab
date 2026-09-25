@@ -58,7 +58,7 @@ def handle_alarm(sig, frame):
     signal.alarm(2)
 def usr1_handler(sig, frame):
     global gold, mana
-    if gold > 5:
+    if gold >= 5:
         gold -= 5
         mana += 10
     else:
@@ -66,7 +66,7 @@ def usr1_handler(sig, frame):
 
 def usr2_handler(sig, frame):
     global health, mana, pos_r, pos_c, gold
-    if mana > 5:
+    if mana >= 5:
         mana -= 5
         health += 10
     else: 
@@ -134,6 +134,11 @@ def main():
                 
             # 4. Extract the main command (the first word)
             command = parts[0]
+
+            # Check if the adventurer is petrified
+            if petrified:
+                sys.stderr.write(f"{adv_name} is petrified\n")
+                continue
             
             # 5. Route the command using if/elif blocks
             if command == "exit":
@@ -149,6 +154,7 @@ def main():
             elif command == "unbox":
                 if mana < 2:
                     print(f"{adv_name}: I cannot cast spells")
+                    continue
                 mana -= 2
                 cell_content = sensor.what_is_here(pos_r,pos_c)
                 if cell_content == 'B':
@@ -159,11 +165,11 @@ def main():
                     elif box_type =='MD':
                         mana -= 10
                     elif box_type == 'HP':
-                        mana +=20
+                        health +=20
                     elif box_type =='HD':
-                        mana -=10
+                        health -=10
                     elif box_type == 'G':
-                        mana +=10
+                        gold +=10
                     print(f"Health: {health} Mana: {mana} Gold: {gold}")
                 else:
                     print(f"No box at position {pos_r}, {pos_c}")
@@ -197,7 +203,7 @@ def main():
                         print(f"OK")
                     else:
                         print(f"{adv_name}: I cannot move {direction}")
-                        print(f"OK")
+                        print(f"KO")
                 else:
                     print("Invalid move command. Did you forget the direction?")
                     
@@ -206,5 +212,5 @@ def main():
                 
         except EOFError:
             break
-        except Exception:
-            pass
+        except InterruptedError:
+            continue
