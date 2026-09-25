@@ -90,7 +90,7 @@ def int_handler(sig, frame):
     global health
     if health >= 10:
      health -= 10
-     
+
 def main():
     global adv_name, adv_id, pos_r, pos_c, health, mana, gold, sensor, petrified
     
@@ -110,6 +110,13 @@ def main():
     # Wire up the health drain timer[cite: 1]
     signal.signal(signal.SIGALRM, handle_alarm)
     signal.alarm(2)
+    # Wire up the other signal handlers
+    signal.signal(signal.SIGUSR1, usr1_handler)
+    signal.signal(signal.SIGUSR2, usr2_handler)
+    signal.signal(signal.SIGQUIT, quit_handler) 
+    signal.signal(signal.SIGTSTP, stop_handler)
+    signal.signal(signal.SIGCONT, cont_handler)
+    signal.signal(signal.SIGINT, int_handler)
     
     # Main command loop
     while True:
