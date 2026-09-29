@@ -8,50 +8,146 @@ mentor_name = "Gandalf"
 dungeon_file = ""
 party_file = ""
 dungeon_dims = (0, 0)
-dungeon_map = []      # Matrix to track Fog of War ('?' for unvisited cells)[cite: 4]
-adventurers = []      # List of dictionaries/objects containing initial adventurer data[cite: 4]
-opened_boxes = set()  # Set of (r, c) tuples storing positions of opened boxes[cite: 4]
-total_gold = 0        # Cumulative gold collected by the party[cite: 4]
+dungeon_map = []      # Matrix to track Fog of War ('?' for unvisited cells)
+adventurers = []      # List of dictionaries/objects containing initial adventurer data
+opened_boxes = set()  # Set of (r, c) tuples storing positions of opened boxes
+total_gold = 0        # Cumulative gold collected by the party
 
 # =====================================================================
-# TODO 1: ARGUMENT PARSING AND PARTY VALIDATION
+#  1: ARGUMENT PARSING AND PARTY VALIDATION
 # =====================================================================
 def parse_arguments():
-    """
-    Parse sys.argv to extract:
-    - Mentor name (optional positional argument, default: 'Gandalf')[cite: 4]
-    - -dungeon <filename>: path to the dungeon layout file[cite: 4]
-    - -party <filename>: path to the adventurers description file[cite: 4]
-    """
+    global mentor_name, dungeon_file, party_file
+    i = 1 # Start from index 1 to skip the script name
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == '-dungeon':
+            dungeon_file = sys.argv[i+1]
+            i += 2
+        elif arg == '-party':
+            party_file = sys.argv[i+1]
+            i += 2
+        else:
+            # If it has no flag, it is the mentor name
+            mentor_name = arg
+            i += 1
     pass
 
 def load_party_and_validate():
-    """
-    1. Read the party file line by line[cite: 4].
-       Format per line: (row, col) health mana gold name[cite: 4]
-    2. Instantiate GogglesSpell with the dungeon file[cite: 4].
-    3. Retrieve room dimensions using sensor.dimensions()[cite: 4].
-    4. Initialize 'dungeon_map' with '?' matching room dimensions[cite: 4].
-    5. Validate initial position for each adventurer:
-       - Must be inside room boundaries.
-       - Cannot overlap with an obstacle ('#')[cite: 4].
-       - Cannot overlap with another adventurer's starting position[cite: 4].
-       If invalid, print an error and terminate with sys.exit(1)[cite: 4].
-    6. Do not call GogglesSpell methods anywhere after this setup[cite: 4].
-    """
+    global dungeon_file, party_file, dungeon_dims, dungeon_map, adventurers
+    current_id = 1  
+    try:
+        with open(party_file, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # "(2,2) 100 100 70 Princess Donut" -> "2 2 100 100 70 Princess Donut"
+                clean_line = line.replace('(', '').replace(')', '').replace(',', ' ')
+                
+                parts = clean_line.split()
+
+                pos_r = int(parts[0])
+                pos_c = int(parts[1])
+                health = int(parts[2])
+                mana = int(parts[3])
+                gold = int(parts[4])
+                name = " ".join(parts[5:])
+
+                adv_data = {
+                    "id": current_id,
+                    "name": name,
+                    "pos_r": pos_r,
+                    "pos_c": pos_c,
+                    "health": health,
+                    "mana": mana,
+                    "gold": gold
+                }
+                
+                adventurers.append(adv_data)
+                current_id += 1
+
+        return adventurers
+
+    except OSError as e:
+        sys.stderr.write(f"Error al abrir el archivo {party_file}: {e}\n")
+        sys.exit(1)
+
+    sensor = goggles.GogglesSpell(dungeon_file)
+    dungeon_dims = sensor.dimensions()
+
+    for adv in adventurers:
+        pos_r = adv["pos_r"]
+        pos_c = adv["pos_c"]
+
+        if not (0 <= pos_r < dungeon_dims[0] and 0 <= pos_c < dungeon_dims[1]):
+            sys.stderr.write(f"Error: Adventurer {adv['id']} position ({pos_r}, {pos_c}) is out of bounds.\n")
+            sys.exit(1)
+
+        if sensor.is_obstacle(pos_r, pos_c):
+            sys.stderr.write(f"Error: Adventurer {adv['id']} position ({pos_r}, {pos_c}) overlaps with an obstacle.\n")
+            sys.exit(1)
+
+        for other_adv in adventurers:
+            if other_adv["id"] != adv["id"] and other_adv["pos_r"] == pos_r and other_adv["pos_c"] == pos_c:
+                sys.stderr.write(f"Error: Adventurer {adv['id']} position ({pos_r}, {pos_c}) overlaps with adventurer {other_adv['id']}.\n")
+                sys.exit(1)
+
     pass
 
-# =====================================================================
-# TODO 2: IPC SETUP (PIPES FOR EACH ADVENTURER)
-# =====================================================================
-# The mentor creates n children (one for each adventurer)[cite: 4].
-# For full-duplex communication, create two pipes per adventurer[cite: 2, 4]:
-# 1. Command pipe: Mentor writes -> Adventurer reads (redirected to stdin)[cite: 2, 4]
-# 2. Response pipe: Adventurer writes (stdout) -> Mentor reads[cite: 2, 4]
-# Store pipe file descriptors in lists or data structures associated with each child ID.
+def main():
+    parse_arguments()
+    load_party_and_validate()
+    channels = {}
+    for adv in adventurers:
+        try:
+            adv_id = adv["id"]
+            adv_to_mentor_r, adv_to_mentor_w = os.pipe() # Create a pipe for communication with the adventurer
+            mentor_to_adv_r, mentor_to_adv_w = os.pipe() # Create a pipe for communication with the mentor
+            channels[adv_id] = {
+            "cmd_in": mentor_to_adv_r,      
+            "cmd_out": mentor_to_adv_w,     
+            "resp_in": adv_to_mentor_r,    
+            "resp_out": adv_to_mentor_w,   
+            "pid": None
+           }
+             
+            pid_adv = os.fork()  # Fork a new process for each adventurer
+        except OSError as e:
+            sys.exit(f"Fork failed: {e}") 
+        if pid_adv == 0:  # Child process (adventurer)
+            os.dup2(adv_to_mentor_r, sys.stdin.fileno())  # Redirect stdin to read from the mentor
+            os.dup2(adv_to_mentor_w, sys.stdout.fileno())  # Redirect stdout to write to the mentor
+            os.close(adv_to_mentor_w)  # Close the read end in the child
+            os.close(adv_to_mentor_r)  # Close the write end in the child
+            try:
+              os.execl(
+               sys.executable,                               # Path to the Python interpreter
+               "python3",                                    # arg0
+               "-u",                                         # unbuffered exit
+               "adventurer.py",                              # script name
+               str(adv["id"]),                               # adventurer Id
+               "-f", dungeon_file,                           # maze file
+               "-pos", str(adv["pos_r"]), str(adv["pos_c"]), # Initial position
+               "-h", str(adv["health"]),                     # Health
+               "-m", str(adv["mana"]),                       # Mana
+               "-g", str(adv["gold"]),                       # Gold
+               "-n", adv["name"]                             # Name
+               )
+            except OSError as e:
+              sys.stderr.write(f"Error al mutar el proceso: {e}\n")[cite: 1]
+              sys.exit(1)
+
+        else:  # Parent process (mentor)
+            channels[adv_id]["pid"] = pid_adv
+            os.close(adv_to_mentor_r)  # Close the read end in the parent
+            os.close(adv_to_mentor_w)  # Close the write end in the parent
+            os.close(mentor_to_adv_r)  # Close the read end in the parent
+            os.close(mentor_to_adv_w)  # Close the write end in the parent
 
 # =====================================================================
-# TODO 3: FORK AND CHILD MUTATION (EXEC)
+# 3: FORK AND CHILD MUTATION (EXEC)
 # =====================================================================
 # 1. Loop over each validated adventurer and call os.fork()[cite: 4].
 # 2. Child branch (pid == 0):
@@ -65,7 +161,7 @@ def load_party_and_validate():
 #    - Close the pipe ends that the mentor will not use[cite: 2].
 
 # =====================================================================
-# TODO 4: MENTOR SIGNAL HANDLERS
+# : MENTOR SIGNAL HANDLERS
 # =====================================================================
 # Configure signals using signal.signal():
 # - SIGINT: Finish program, print current party info, wait for children, and exit[cite: 4].
@@ -95,10 +191,6 @@ def load_party_and_validate():
 #     Send 'exit' command to all children, wait for their termination using os.waitpid(),
 #     print exit statuses, and display summary stats[cite: 4].
 
-def main():
-    parse_arguments()
-    load_party_and_validate()
-    # Execute TODO 2, 3, 4, and 5 here
 
 if __name__ == "__main__":
     main()

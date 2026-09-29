@@ -121,6 +121,7 @@ def main():
     # Main command loop
     while True:
         try:
+            
             # 1. Capture the input and make it lowercase
             choice = input("Enter your choice: ")
             choice = choice.lower()
@@ -134,7 +135,7 @@ def main():
                 
             # 4. Extract the main command (the first word)
             command = parts[0]
-
+            
             # Check if the adventurer is petrified
             if petrified:
                 sys.stderr.write(f"{adv_name} is petrified\n")
