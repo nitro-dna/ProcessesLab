@@ -13,9 +13,7 @@ adventurers = []      # List of dictionaries/objects containing initial adventur
 opened_boxes = set()  # Set of (r, c) tuples storing positions of opened boxes
 total_gold = 0        # Cumulative gold collected by the party
 
-# =====================================================================
 #  1: ARGUMENT PARSING AND PARTY VALIDATION
-# =====================================================================
 def parse_arguments():
     global mentor_name, dungeon_file, party_file
     i = 1 # Start from index 1 to skip the script name
@@ -140,11 +138,7 @@ def main():
               sys.exit(1)
 
         else:  # Parent process (mentor)
-            channels[adv_id]["pid"] = pid_adv
-            os.close(adv_to_mentor_r)  # Close the read end in the parent
-            os.close(adv_to_mentor_w)  # Close the write end in the parent
-            os.close(mentor_to_adv_r)  # Close the read end in the parent
-            os.close(mentor_to_adv_w)  # Close the write end in the parent
+       
 
 # =====================================================================
 # 3: FORK AND CHILD MUTATION (EXEC)
@@ -161,7 +155,7 @@ def main():
 #    - Close the pipe ends that the mentor will not use[cite: 2].
 
 # =====================================================================
-# : MENTOR SIGNAL HANDLERS
+# 4: MENTOR SIGNAL HANDLERS
 # =====================================================================
 # Configure signals using signal.signal():
 # - SIGINT: Finish program, print current party info, wait for children, and exit[cite: 4].
@@ -171,8 +165,30 @@ def main():
 # - SIGQUIT: Query and print current position, health, mana, and gold for all adventurers[cite: 4].
 
 # =====================================================================
-# TODO 5: MENTOR INTERACTIVE COMMAND LOOP
+# 5: MENTOR INTERACTIVE COMMAND LOOP
 # =====================================================================
+while True:
+    try:
+     choice = input("Enter command: ")
+     choice = choice.lower()
+     parts = choice.split()
+
+     if (len(parts) == 0):
+         continue 
+     command = parts[0]
+     if command == "exit":
+         for adv in adventurers:
+             pid = channels[adv["id"]]["pid"]
+             os.kill(pid, signal.SIGTERM)  # Send SIGTERM to each adventurer
+         for adv in adventurers:
+             pid = channels[adv["id"]]["pid"]
+             os.waitpid(pid, 0)  # Wait for each adventurer to terminate
+         print("All adventurers have exited. Mentor exiting.")
+         sys.exit(0)
+     elif command == "print":
+        # Display the discovered map with Fog of War ('?'), showing adventurers as 'A'
+        
+
 # Implement the command-line interface loop (while True):
 # - mv <id/all> <direction>:
 #     Check for collisions against walls or other adventurers before sending command[cite: 4].
