@@ -10,12 +10,13 @@ party_file = ""
 dungeon_dims = (0, 0)
 dungeon_map = []      # Matrix to track Fog of War ('?' for unvisited cells)
 adventurers = []      # List of dictionaries/objects containing initial adventurer data
+channels = {}
 opened_boxes = set()  # Set of (r, c) tuples storing positions of opened boxes
 total_gold = 0        # Cumulative gold collected by the party
 
 #  1: ARGUMENT PARSING AND PARTY VALIDATION
 def parse_arguments():
-    global mentor_name, dungeon_file, party_file
+    global mentor_name, dungeon_file, party_file, channels
     i = 1 # Start from index 1 to skip the script name
     while i < len(sys.argv):
         arg = sys.argv[i]
@@ -66,7 +67,7 @@ def load_party_and_validate():
                 adventurers.append(adv_data)
                 current_id += 1
 
-        return adventurers
+        ##return adventurers
 
     except OSError as e:
         sys.stderr.write(f"Error al abrir el archivo {party_file}: {e}\n")
@@ -94,10 +95,48 @@ def load_party_and_validate():
 
     pass
 
+def handle_usr1(sig, frame):
+    for adv_id, data in channels.items():
+        child_pid = data["pid"]
+
+        if child_pid is not None:
+            os.kill(child_pid, signal.SIGUSR1)
+
+def handle_usr2(sig, frame):
+    for adv_id, data in channels.items():
+        child_pid = data["pid"]
+
+        if child_pid is not None:
+            os.kill(child_pid, signal.SIGUSR2)
+def handle_mentor_quit(sig, frame):
+    for adv_id, data in channels.items():
+        child_pid = data["pid"]
+
+        if child_pid is not None:
+            os.kill(child_pid, signal.SIGQUIT)
+
+def handle_mentor_tstp(sig, frame):
+    for adv_id, data in channels.items():
+        child_pid = data["pid"]
+
+        if child_pid is not None:
+            os.kill(child_pid, signal.SIGINT)
+def handle_mentor(sig, frame):
+    sys.stderr.write("\nMentor shutting down party...\n")
+    for adv in adventurers:
+        sys.stderr.write(f"{adv['name']} is at {adv['pos_r']}, {adv['pos_c']}\n") # 1. Print positions
+
+    for adv_id, data in channels.items():  # 2. Kill children and wait
+        child_pid = data["pid"]
+
+        if child_pid is not None:
+            os.kill(child_pid, signal.SIGINT)
+            os.waitpid(child_pid, 0)
+        
+    sys.exit(0)
 def main():
     parse_arguments()
     load_party_and_validate()
-    channels = {}
     for adv in adventurers:
         try:
             adv_id = adv["id"]
@@ -115,10 +154,17 @@ def main():
         except OSError as e:
             sys.exit(f"Fork failed: {e}") 
         if pid_adv == 0:  # Child process (adventurer)
-            os.dup2(adv_to_mentor_r, sys.stdin.fileno())  # Redirect stdin to read from the mentor
-            os.dup2(adv_to_mentor_w, sys.stdout.fileno())  # Redirect stdout to write to the mentor
+            ##os.dup2(adv_to_mentor_r, sys.stdin.fileno())  # Redirect stdin to read from the mentor
+            ##os.dup2(adv_to_mentor_w, sys.stdout.fileno())  # Redirect stdout to write to the mentor
+            os.dup2(mentor_to_adv_r,0) # Read from the Mentor (Command In)
+            os.dup2(adv_to_mentor_w,1) # Write to the Mentor (Response Out)
+
             os.close(adv_to_mentor_w)  # Close the read end in the child
             os.close(adv_to_mentor_r)  # Close the write end in the child
+            os.close(mentor_to_adv_w)
+            os.close(mentor_to_adv_r)
+
+            os.execl(sys.executable,"python3", "-u", "adventurer.py")
             try:
               os.execl(
                sys.executable,                               # Path to the Python interpreter
@@ -138,6 +184,11 @@ def main():
               sys.exit(1)
 
         else:  # Parent process (mentor)
+            # Save the child's PID into the global dictionary
+            channels[adv_id]["pid"] = pid_adv
+            os.close(adv_to_mentor_w)  # Close the read end in the child
+            os.close(mentor_to_adv_r)  # Close the write end in the child
+
        
 
 # =====================================================================
@@ -167,6 +218,11 @@ def main():
 # =====================================================================
 # 5: MENTOR INTERACTIVE COMMAND LOOP
 # =====================================================================
+signal.signal(signal.SIGUSR1, handle_usr1)
+signal.signal(signal.SIGUSR2, handle_usr2)
+signal.signal(signal.SIGQUIT, handle_mentor_quit)
+signal.signal(signal.SIGTSTP, handle_mentor_tstp)
+signal.signal(signal.SIGINT, handle_mentor)
 while True:
     try:
      choice = input("Enter command: ")
