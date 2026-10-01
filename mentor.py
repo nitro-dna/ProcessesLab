@@ -184,16 +184,16 @@ def main():
               sys.stderr.write(f"Error al mutar el proceso: {e}\n")[cite: 1]
               sys.exit(1)
 
-        else:  # Parent process (mentor)
+    else:  # Parent process (mentor)
             # Save the child's PID into the global dictionary
-            channels[adv_id]["pid"] = pid_adv
-            os.close(adv_to_mentor_w)  # Close the read end in the child
-            os.close(mentor_to_adv_r)  # Close the write end in the child
-            signal.signal(signal.SIGUSR1, handle_usr1)
-            signal.signal(signal.SIGUSR2, handle_usr2)
-            signal.signal(signal.SIGQUIT, handle_mentor_quit)
-            signal.signal(signal.SIGTSTP, handle_mentor_tstp)
-            signal.signal(signal.SIGINT, handle_mentor)
+        channels[adv_id]["pid"] = pid_adv
+        os.close(adv_to_mentor_w)  # Close the read end in the child
+        os.close(mentor_to_adv_r)  # Close the write end in the child
+        signal.signal(signal.SIGUSR1, handle_usr1)
+        signal.signal(signal.SIGUSR2, handle_usr2)
+        signal.signal(signal.SIGQUIT, handle_mentor_quit)
+        signal.signal(signal.SIGTSTP, handle_mentor_tstp)
+        signal.signal(signal.SIGINT, handle_mentor)
 
 while True:
     try:
