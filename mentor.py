@@ -13,6 +13,7 @@ adventurers = []      # List of dictionaries/objects containing initial adventur
 channels = {}
 opened_boxes = set()  # Set of (r, c) tuples storing positions of opened boxes
 total_gold = 0        # Cumulative gold collected by the party
+opened_boxes = set()  # Set of (r, c) tuples storing positions of opened boxes
 
 #  1: ARGUMENT PARSING AND PARTY VALIDATION
 def parse_arguments():
@@ -194,12 +195,6 @@ def main():
             signal.signal(signal.SIGTSTP, handle_mentor_tstp)
             signal.signal(signal.SIGINT, handle_mentor)
 
-# Asegúrate de tener estas variables globales definidas antes del while:
-# opened_boxes = set()  # Para registrar las cajas abiertas
-
-# =====================================================================
-# TODO 5: MENTOR INTERACTIVE COMMAND LOOP
-# =====================================================================
 while True:
     try:
         choice = input("Enter command: ").strip()
