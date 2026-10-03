@@ -3,6 +3,7 @@ import sys
 import signal
 import goggles # Allowed only during the setup phase[cite: 4]
 
+
 # Global variables for the Mentor
 mentor_name = "Gandalf"
 dungeon_file = ""
@@ -184,206 +185,230 @@ def main():
               sys.stderr.write(f"Error al mutar el proceso: {e}\n")[cite: 1]
               sys.exit(1)
 
-    else:  # Parent process (mentor)
+        else:  # Parent process (mentor)
             # Save the child's PID into the global dictionary
-        channels[adv_id]["pid"] = pid_adv
-        os.close(adv_to_mentor_w)  # Close the read end in the child
-        os.close(mentor_to_adv_r)  # Close the write end in the child
-        signal.signal(signal.SIGUSR1, handle_usr1)
-        signal.signal(signal.SIGUSR2, handle_usr2)
-        signal.signal(signal.SIGQUIT, handle_mentor_quit)
-        signal.signal(signal.SIGTSTP, handle_mentor_tstp)
-        signal.signal(signal.SIGINT, handle_mentor)
+            channels[adv_id]["pid"] = pid_adv
+            os.close(adv_to_mentor_w)  # Close the read end in the child
+            os.close(mentor_to_adv_r)  # Close the write end in the child
+    signal.signal(signal.SIGUSR1, handle_usr1)
+    signal.signal(signal.SIGUSR2, handle_usr2)
+    signal.signal(signal.SIGQUIT, handle_mentor_quit)
+    signal.signal(signal.SIGTSTP, handle_mentor_tstp)
+    signal.signal(signal.SIGINT, handle_mentor)
+    fifo_out_dm = open("mentor_to_dm.fifo", "w")
+    fifo_in_dm = open("dm_to_mentor.fifo", "r")
 
-while True:
-    try:
-        choice = input("Enter command: ").strip()
-        if not choice:
-            continue
-            
-        choice = choice.lower()
-        parts = choice.split()
-        command = parts[0]
 
-        # ---------------------------------------------------------
-        # COMMAND: EXIT
-        # ---------------------------------------------------------
-        if command == "exit":
-            # Send 'exit' command to all children
-            for adv in adventurers:
-                fd_out = channels[adv["id"]]["cmd_out"]
-                os.write(fd_out, b"exit\n")
-            
-            # Wait for each adventurer to terminate and get exit status
-            for adv in adventurers:
-                pid = channels[adv["id"]]["pid"]
-                _, status = os.waitpid(pid, 0)
-                exit_code = status >> 8
-                print(f"Adventurer {adv['id']} exited with status {exit_code}")
+
+
+    while True:
+        try:
+            choice = input("Enter command: ").strip()
+            if not choice:
+                continue
                 
-            print("All adventurers have exited. Mentor exiting.")
-            sys.exit(0)
+            choice = choice.lower()
+            parts = choice.split()
+            command = parts[0]
 
-        # ---------------------------------------------------------
-        # COMMAND: PRINT (C-STYLE)
-        # ---------------------------------------------------------
-        elif command == "print":
-            # Iterate through rows and columns explicitly
-            for r in range(dungeon_dims[0]):
-                row_str = ""
-                for c in range(dungeon_dims[1]):
-                    # Check if there is any adventurer at these coordinates
-                    adv_here = False
-                    for adv in adventurers:
-                        if adv["pos_r"] == r and adv["pos_c"] == c:
-                            adv_here = True
-                            break # C-optimization: stop searching if found
-                    
-                    if adv_here:
-                        row_str += "A"
-                    else:
-                        row_str += dungeon_map[r][c]
-                print(row_str)
-            continue
-
-        # =========================================================
-        # TARGET PROCESSING (<id> or 'all') (C-STYLE)
-        # =========================================================
-        if len(parts) < 2:
-            print("Error: Missing target (need 'all' or id).")
-            continue
-            
-        target_str = parts[1]
-        target_ids = []
-        
-        if target_str == "all":
-            # Add all IDs one by one
-            for adv in adventurers:
-                target_ids.append(adv["id"])
-        else:
-            try:
-                tid = int(target_str)
-                # Existence validation with a boolean flag
-                id_exists = False
+            # ---------------------------------------------------------
+            # COMMAND: EXIT
+            # ---------------------------------------------------------
+            if command == "exit":
+                fifo_out_dm.write("EXIT\n")
+                fifo_out_dm.flush()
+                # Send 'exit' command to all children
                 for adv in adventurers:
-                    if adv["id"] == tid:
-                        id_exists = True
-                        break
+                    fd_out = channels[adv["id"]]["cmd_out"]
+                    os.write(fd_out, b"exit\n")
                 
-                if id_exists:
-                    target_ids.append(tid)
-                else:
-                    print("Error: Adventurer ID not found.")
-                    continue
-            except ValueError:
-                print("Error: Invalid ID format.")
+                # Wait for each adventurer to terminate and get exit status
+                for adv in adventurers:
+                    pid = channels[adv["id"]]["pid"]
+                    _, status = os.waitpid(pid, 0)
+                    exit_code = status >> 8
+                    print(f"Adventurer {adv['id']} exited with status {exit_code}")
+                    
+                print("All adventurers have exited. Mentor exiting.")
+                sys.exit(0)
+
+            # ---------------------------------------------------------
+            # COMMAND: PRINT (C-STYLE)
+            # ---------------------------------------------------------
+            elif command == "print":
+                # Iterate through rows and columns explicitly
+                for r in range(dungeon_dims[0]):
+                    row_str = ""
+                    for c in range(dungeon_dims[1]):
+                        # Check if there is any adventurer at these coordinates
+                        adv_here = False
+                        for adv in adventurers:
+                            if adv["pos_r"] == r and adv["pos_c"] == c:
+                                adv_here = True
+                                break # C-optimization: stop searching if found
+                        
+                        if adv_here:
+                            row_str += "A"
+                        else:
+                            row_str += dungeon_map[r][c]
+                    print(row_str)
                 continue
 
-        # ---------------------------------------------------------
-        # COMMAND EXECUTION BY TARGET
-        # ---------------------------------------------------------
-        for tid in target_ids:
-            # 1. Retrieve the complete dictionary of the current adventurer
-            current_adv = None
-            for adv in adventurers:
-                if adv["id"] == tid:
-                    current_adv = adv
-                    break
+            # =========================================================
+            # TARGET PROCESSING (<id> or 'all') (C-STYLE)
+            # =========================================================
+            if len(parts) < 2:
+                print("Error: Missing target (need 'all' or id).")
+                continue
+                
+            target_str = parts[1]
+            target_ids = []
             
-            if command == "pos":
-                print(f"Adventurer {tid} position: ({current_adv['pos_r']}, {current_adv['pos_c']})")
-
-            elif command == "health":
-                os.write(channels[tid]["cmd_out"], b"health\n")
-                resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
-                print(f"Adventurer {tid} health: {resp}")
-
-            elif command in ["petrify", "depetrify"]:
-                signum = signal.SIGTSTP if command == "petrify" else signal.SIGCONT
-                os.kill(channels[tid]["pid"], signum)
-                print(f"Sent {command.upper()} signal to Adventurer {tid}.")
-
-            elif command == "unbox":
-                pos_tuple = (current_adv["pos_r"], current_adv["pos_c"])
-                if pos_tuple in opened_boxes:
-                    print(f"Box at {pos_tuple} is already opened.")
-                else:
-                    os.write(channels[tid]["cmd_out"], b"unbox\n")
-                    resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
-                    print(f"Adventurer {tid} unbox result: {resp}")
-                    if "OK" in resp:
-                        opened_boxes.add(pos_tuple)
-
-            elif command == "mv":
-                if len(parts) < 3:
-                    print("Error: Missing direction for mv.")
-                    continue
-                
-                direction = parts[2]
-                nr = current_adv["pos_r"]
-                nc = current_adv["pos_c"]
-                
-                # Calculate new theoretical position
-                if direction == "up": nr -= 1
-                elif direction == "down": nr += 1
-                elif direction == "left": nc -= 1
-                elif direction == "right": nc += 1
-                else:
-                    print(f"Invalid direction: {direction}")
+            if target_str == "all":
+                # Add all IDs one by one
+                for adv in adventurers:
+                    target_ids.append(adv["id"])
+            else:
+                try:
+                    tid = int(target_str)
+                    # Existence validation with a boolean flag
+                    id_exists = False
+                    for adv in adventurers:
+                        if adv["id"] == tid:
+                            id_exists = True
+                            break
+                    
+                    if id_exists:
+                        target_ids.append(tid)
+                    else:
+                        print("Error: Adventurer ID not found.")
+                        continue
+                except ValueError:
+                    print("Error: Invalid ID format.")
                     continue
 
-                # Boundary collision check
-                if not (0 <= nr < dungeon_dims[0] and 0 <= nc < dungeon_dims[1]):
-                    print(f"Move failed for {tid}: Out of bounds.")
-                    continue
-
-                # Wall collision check
-                if dungeon_map[nr][nc] == '#':
-                    print(f"Move failed for {tid}: Wall collision.")
-                    continue
-
-                # 2. Collision control with other adventurers
-                collision = False
-                for other in adventurers:
-                    if other["pos_r"] == nr and other["pos_c"] == nc:
-                        collision = True
+            # ---------------------------------------------------------
+            # COMMAND EXECUTION BY TARGET
+            # ---------------------------------------------------------
+            for tid in target_ids:
+                # 1. Retrieve the complete dictionary of the current adventurer
+                current_adv = None
+                for adv in adventurers:
+                    if adv["id"] == tid:
+                        current_adv = adv
                         break
                 
-                if collision:
-                    print(f"Move failed for {tid}: Cell occupied by another adventurer.")
-                    continue
+                if command == "pos":
+                    print(f"Adventurer {tid} position: ({current_adv['pos_r']}, {current_adv['pos_c']})")
 
-                # Send move command
-                cmd_str = f"mv {direction}\n"
-                os.write(channels[tid]["cmd_out"], cmd_str.encode('utf-8'))
-                
-                # Read response
-                resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
-                
-                if resp.startswith("OK"):
-                    current_adv["pos_r"] = nr
-                    current_adv["pos_c"] = nc
+                elif command == "health":
+                    os.write(channels[tid]["cmd_out"], b"health\n")
+                    resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
+                    print(f"Adventurer {tid} health: {resp}")
+
+                elif command in ["petrify", "depetrify"]:
+                    signum = signal.SIGTSTP if command == "petrify" else signal.SIGCONT
+                    os.kill(channels[tid]["pid"], signum)
+                    print(f"Sent {command.upper()} signal to Adventurer {tid}.")
+
+                elif command == "unbox":
+                    pos_tuple = (current_adv["pos_r"], current_adv["pos_c"])
+                    if pos_tuple in opened_boxes:
+                        print(f"Box at {pos_tuple} is already opened.")
+                    else:
+                        os.write(channels[tid]["cmd_out"], b"unbox\n")
+                        resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
+                        print(f"Adventurer {tid} unbox result: {resp}")
+                        if "OK" in resp:
+                            opened_boxes.add(pos_tuple)
+
+                elif command == "mv":
+                    if len(parts) < 3:
+                        print("Error: Missing direction for mv.")
+                        continue
                     
-                    # Update fog of war if there's discovered terrain
-                    resp_parts = resp.split()
-                    if len(resp_parts) > 1:
-                        dungeon_map[nr][nc] = resp_parts[1]
-                    print(f"Adventurer {tid} moved successfully.")
+                    direction = parts[2]
+                    nr = current_adv["pos_r"]
+                    nc = current_adv["pos_c"]
+                    
+                    # Calculate new theoretical position
+                    if direction == "up": nr -= 1
+                    elif direction == "down": nr += 1
+                    elif direction == "left": nc -= 1
+                    elif direction == "right": nc += 1
+                    else:
+                        print(f"Invalid direction: {direction}")
+                        continue
+
+                    # Boundary collision check
+                    if not (0 <= nr < dungeon_dims[0] and 0 <= nc < dungeon_dims[1]):
+                        print(f"Move failed for {tid}: Out of bounds.")
+                        continue
+
+                    # Wall collision check
+                    if dungeon_map[nr][nc] == '#':
+                        print(f"Move failed for {tid}: Wall collision.")
+                        continue
+
+                    # 2. Collision control with other adventurers
+                    collision = False
+                    for other in adventurers:
+                        if other["pos_r"] == nr and other["pos_c"] == nc:
+                            collision = True
+                            break
+                    
+                    if collision:
+                        print(f"Move failed for {tid}: Cell occupied by another adventurer.")
+                        continue
+
+                    # Send move command
+                    cmd_str = f"mv {direction}\n"
+                    os.write(channels[tid]["cmd_out"], cmd_str.encode('utf-8'))
+                    
+                    # Read response
+                    resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
+                    
+                    if resp.startswith("OK"):
+                        current_adv["pos_r"] = nr
+                        current_adv["pos_c"] = nc
+                        # telling the DM the movement 
+                        fifo_out_dm.write(f"MOVE {tid} {nr} {nc}\n")
+                        fifo_out_dm.flush()
+                        #wait for the repsonse from DM
+                        dm_response = fifo_in_dm.readline().strip().split()
+                        if not dm_response:
+                            continue
+                        dm_status = dm_response[0]
+                        # 3. the DM response review
+                        if dm_status == "HIT":
+                            print(f"Monster attacked Adventurer {tid}!")
+                            # deduct 10 health from ADV (with SIGINT)
+                            os.kill(channels[tid]["pid"], signal.SIGINT)
+                        elif dm_status == "KILLED":
+                            print(f"Adventurer {tid} killed a monster!")
+                        elif dm_status == "CLEAR":
+                            print(f"Adventurer {tid} moved safely.")
+
+                        # Update fog of war if there's discovered terrain
+                        resp_parts = resp.split()
+                        if len(resp_parts) > 1:
+                            dungeon_map[nr][nc] = resp_parts[1]
+                        print(f"Adventurer {tid} moved successfully.")
+                    else:
+                        print(f"Adventurer {tid} failed to move: {resp}")
+                        dungeon_map[nr][nc] = '#'
+
                 else:
-                    print(f"Adventurer {tid} failed to move: {resp}")
-                    dungeon_map[nr][nc] = '#'
+                    print(f"Unknown command: {command}")
+                    break 
 
-            else:
-                print(f"Unknown command: {command}")
-                break 
-
-    except (EOFError, KeyboardInterrupt):
-        # Capture Ctrl+D or Ctrl+C to exit gracefully
-        print("\nEmergency exit triggered.")
-        break
-    except Exception as e:
-        # Prevents a typo or silly mistake from crashing the mentor
-        print(f"Unexpected error processing command: {e}")
+        except (EOFError, KeyboardInterrupt):
+            # Capture Ctrl+D or Ctrl+C to exit gracefully
+            print("\nEmergency exit triggered.")
+            break
+        except Exception as e:
+            # Prevents a typo or silly mistake from crashing the mentor
+            print(f"Unexpected error processing command: {e}")
 
 if __name__ == "__main__":
     main()
