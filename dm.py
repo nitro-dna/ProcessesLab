@@ -4,8 +4,8 @@ import os, sys, goggles
 dungeon_file = ""
 monsters_file = ""
 monsters = []
-FIFO_MENTOR_TO_DM = "fifo_m2dm"
-FIFO_DM_TO_MENTOR = "fifo_dm2m"
+FIFO_M2DM = "mentor_to_dm.fifo"
+FIFO_DM2M = "dm_to_mentor.fifo"
 
 def parse_arguments():
     global dungeon_file, monsters_file
@@ -23,7 +23,7 @@ def parse_arguments():
         sys.exit(1)
 
 def load_monster():
-    global dungeon_file, monsters_file
+    global dungeon_file, monsters_file, monsters
     current_id = 1
     try:
         with open(monsters_file, 'r') as file:
@@ -52,7 +52,7 @@ def load_monster():
         sys.stderr.write(f"Error while opening the monsters file: {e}\n")
         sys.exit(1)
     # validate with the sensor 
-    sensor = goggles.GogglesSpell(monsters_file)
+    sensor = goggles.GogglesSpell(dungeon_file)
 
     for m in monsters:
         pos_r = m["pos_r"]
@@ -63,3 +63,51 @@ def load_monster():
             sys.exit(1)
 
 
+def setup_fifos():
+    if os.path.exists(FIFO_M2DM):
+        os.unlink(FIFO_M2DM)
+    if os.path.exists(FIFO_DM2M):
+        os.unlink(FIFO_DM2M)
+    
+    os.mkfifo(FIFO_M2DM)
+    os.mkfifo(FIFO_DM2M)
+
+    with open(FIFO_M2DM, 'r') as fifo_in, open(FIFO_DM2M, 'w') as fifo_out:
+        while True:
+            line = fifo_in.readline()
+            if not line:
+                break
+            parts = line.strip().split()
+            if not parts:
+                continue
+            command = parts[0]
+            if command == "EXIT":
+                break
+            elif command == "MOVE":
+                adv_id = parts[1]
+                pos_r = int(parts[2])
+                pos_c = int(parts[3])
+                monster_found = False
+                for m in monsters:
+                    if m["pos_r"] == pos_r and m["pos_c"] == pos_c:
+                        m["health"] -= 10
+                        if m["health"] <= 0:
+                            fifo_out.write(f"KILLED {adv_id}\n")
+                            fifo_out.flush()
+                            monsters.remove(m)
+                        else:
+                            fifo_out.write(f"HIT {adv_id}\n")
+                            fifo_out.flush()
+                        monster_found = True
+                        break
+                if not monster_found:
+                    fifo_out.write(f"CLEAR {adv_id}\n")
+                    fifo_out.flush()            
+
+def main():
+    parse_arguments()
+    load_monster()
+    setup_fifos()
+
+if __name__ == "__main__":
+    main()
