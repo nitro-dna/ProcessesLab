@@ -64,30 +64,60 @@ def load_monster():
 
 
 def setup_fifos():
+    global monsters
+    
+    # 1. Turn off Linux security filter to apply true 0o666 permissions
+    original_umask = os.umask(0)
+    
+    # Initial cleanup in case the program crashed in a previous run
     if os.path.exists(FIFO_M2DM):
         os.unlink(FIFO_M2DM)
     if os.path.exists(FIFO_DM2M):
         os.unlink(FIFO_DM2M)
     
-    os.mkfifo(FIFO_M2DM)
-    os.mkfifo(FIFO_DM2M)
+    # Create FIFOs with universal permissions
+    os.mkfifo(FIFO_M2DM, 0o666)
+    os.mkfifo(FIFO_DM2M, 0o666)
+    
+    # Restore the security filter as a good practice
+    os.umask(original_umask)
 
-    with open(FIFO_M2DM, 'r') as fifo_in, open(FIFO_DM2M, 'w') as fifo_out:
+    try:
+        print("DM: Waiting for Mentor connection...")
+        
+        # 2. BLOCKING OPEN (Careful with the opening order in the Mentor)
+        # The Mentor MUST execute: fifo_out = open(FIFO_M2DM, 'w') BEFORE opening the other pipe.
+        fifo_in = open(FIFO_M2DM, 'r')
+        fifo_out = open(FIFO_DM2M, 'w')
+        
+        print("DM: Mentor connected. Starting game.")
+
         while True:
             line = fifo_in.readline()
             if not line:
                 break
+                
             parts = line.strip().split()
             if not parts:
                 continue
+                
             command = parts[0]
+            
             if command == "EXIT":
+                print("DM: Exit command received. Closing dungeon...")
                 break
+                
             elif command == "MOVE":
+                if len(parts) < 4:
+                    continue # Protection against malformed commands
+                    
                 adv_id = parts[1]
                 pos_r = int(parts[2])
                 pos_c = int(parts[3])
+                
                 monster_found = False
+                
+                # loop to search for the monster
                 for m in monsters:
                     if m["pos_r"] == pos_r and m["pos_c"] == pos_c:
                         m["health"] -= 10
@@ -98,11 +128,28 @@ def setup_fifos():
                         else:
                             fifo_out.write(f"HIT {adv_id}\n")
                             fifo_out.flush()
+                        
                         monster_found = True
-                        break
+                        break # Found, stop searching
+                        
                 if not monster_found:
                     fifo_out.write(f"CLEAR {adv_id}\n")
-                    fifo_out.flush()            
+                    fifo_out.flush()
+                    
+    finally:
+        # 3. ABSOLUTE CLEANUP
+        # This block ALWAYS executes, even if the program crashes due to an error
+        print("DM: Cleaning pipes from disk...")
+        try:
+            fifo_in.close()
+            fifo_out.close()
+        except:
+            pass
+            
+        if os.path.exists(FIFO_M2DM):
+            os.unlink(FIFO_M2DM)
+        if os.path.exists(FIFO_DM2M):
+            os.unlink(FIFO_DM2M)      
 
 def main():
     parse_arguments()
