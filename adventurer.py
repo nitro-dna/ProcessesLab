@@ -211,7 +211,7 @@ def main():
             else:
                 print("Invalid command")
                 
-        except EOFError:
+        except EOFError: #So Ctrl+D can exit the program
             break
-        except InterruptedError:
+        except InterruptedError: #So signals can interrupt input() without crashing the program
             continue

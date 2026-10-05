@@ -199,8 +199,6 @@ def main():
     fifo_in_dm = open("dm_to_mentor.fifo", "r")
 
 
-
-
     while True:
         try:
             choice = input("Enter command: ").strip()
