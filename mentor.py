@@ -77,6 +77,7 @@ def load_party_and_validate():
 
     sensor = goggles.GogglesSpell(dungeon_file)
     dungeon_dims = sensor.dimensions()
+    dungeon_map = [['?' for _ in range(dungeon_dims[1])] for _ in range(dungeon_dims[0])]
 
     for adv in adventurers:
         pos_r = adv["pos_r"]
@@ -86,7 +87,7 @@ def load_party_and_validate():
             sys.stderr.write(f"Error: Adventurer {adv['id']} position ({pos_r}, {pos_c}) is out of bounds.\n")
             sys.exit(1)
 
-        if sensor.is_obstacle(pos_r, pos_c):
+        if sensor.what_is_here(pos_r, pos_c) == '#':
             sys.stderr.write(f"Error: Adventurer {adv['id']} position ({pos_r}, {pos_c}) overlaps with an obstacle.\n")
             sys.exit(1)
 
@@ -166,7 +167,6 @@ def main():
             os.close(mentor_to_adv_w)
             os.close(mentor_to_adv_r)
 
-            os.execl(sys.executable,"python3", "-u", "adventurer.py")
             try:
               os.execl(
                sys.executable,                               # Path to the Python interpreter
@@ -317,7 +317,7 @@ def main():
                         os.write(channels[tid]["cmd_out"], b"unbox\n")
                         resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
                         print(f"Adventurer {tid} unbox result: {resp}")
-                        if "OK" in resp:
+                        if "Type:" in resp:
                             opened_boxes.add(pos_tuple)
 
                 elif command == "mv":
@@ -366,7 +366,7 @@ def main():
                     # Read response
                     resp = os.read(channels[tid]["resp_in"], 1024).decode('utf-8').strip()
                     
-                    if resp.startswith("OK"):
+                    if "OK" in resp:
                         current_adv["pos_r"] = nr
                         current_adv["pos_c"] = nc
                         # telling the DM the movement 
