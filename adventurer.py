@@ -123,7 +123,7 @@ def main():
         try:
             
             # 1. Capture the input and make it lowercase
-            choice = input("Enter your choice: ")
+            
             choice = choice.lower()
             
             # 2. Split the string into a list of parts
