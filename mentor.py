@@ -182,7 +182,7 @@ def main():
                "-n", adv["name"]                             # Name
                )
             except OSError as e:
-              sys.stderr.write(f"Error al mutar el proceso: {e}\n")[cite: 1]
+              sys.stderr.write(f"Failed to execute the process: {e}\n")
               sys.exit(1)
 
         else:  # Parent process (mentor)
