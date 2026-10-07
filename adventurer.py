@@ -218,3 +218,7 @@ def main():
             break
         except InterruptedError: #So signals can interrupt input() without crashing the program
             continue
+
+
+if __name__ == "__main__":
+    main()
