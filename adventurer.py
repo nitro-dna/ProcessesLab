@@ -123,6 +123,9 @@ def main():
         try:
             
             # 1. Capture the input and make it lowercase
+            choice = sys.stdin.readline().strip()
+            if not choice: # If the pipe closes (EOF), break the loop
+                break
             
             choice = choice.lower()
             
