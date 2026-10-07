@@ -1,0 +1,4 @@
+(1,1) 40 The Gray Gentlemen
+(4,4) 50 Steve the Troll
+(2,1) 100 Detritus
+(1,3) 100 Smaug

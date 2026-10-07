@@ -1,0 +1,4 @@
+(1,1) 60 Drogon
+(2,0) 100 Sauron
+(0,2) 100 Pustule the Goblin
+(3,3) 30 Gmork
